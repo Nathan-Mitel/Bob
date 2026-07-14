@@ -1,0 +1,942 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Bob le calculateur</title>
+
+<!-- ═══ PWA : manifeste + icônes (fonctionnent une fois hébergé sur GitHub Pages ; ignorés en local) ═══ -->
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="theme-color" content="#f5f1e8">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Bob">
+
+<!-- Polices du design system Néo-mobile -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+<style>
+/* ════════════════════════════════════════════════════════════════
+   BOB LE CALCULATEUR — suivi d'actes & CA, psychiatrie libérale
+   Design system « Néo-mobile », palette Forêt.
+   Tout est dans ce fichier : styles, logique, données (localStorage).
+   ════════════════════════════════════════════════════════════════ */
+:root{
+  /* ── encre & surfaces (palette Forêt) ── */
+  --ink:#2a2620;          /* texte principal, cartes sombres */
+  --ink-soft:#6f685c;     /* texte secondaire */
+  --ink-faint:#a89f8e;    /* texte tertiaire, méta */
+  --surface:#fffdf8;      /* cartes */
+  --bg:#f5f1e8;           /* fond de page */
+  --line:#e8e1d3;         /* filets */
+  --cream:#f3efe8;        /* texte sur fond sombre */
+
+  /* ── accent (famille « track » du système : suivi) ── */
+  --accent:#1f6f5c;       /* vert forêt */
+  --accent-bg:#e1efe9;    /* teinte claire */
+  --ok:#1f9d6f;
+  --danger:#d05151; --danger-bg:#fde8e8;
+
+  /* ── typo ── */
+  --font-display:'Bricolage Grotesque','Plus Jakarta Sans',system-ui,sans-serif;
+  --font-ui:'Plus Jakarta Sans','Segoe UI',system-ui,sans-serif;
+
+  /* ── rayons / ombres (signature néo-mobile) ── */
+  --radius:26px;
+  --radius-sm:16px;
+  --radius-chip:20px;
+  --shadow-card:0 12px 36px -20px rgba(28,27,46,.40);
+  --shadow-soft:0 2px 12px rgba(28,27,46,.08);
+  --ease:cubic-bezier(.2,.8,.2,1);
+}
+
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%}
+body{
+  font-family:var(--font-ui);
+  background:var(--bg);
+  color:var(--ink);
+  -webkit-font-smoothing:antialiased;
+  line-height:1.5;
+  min-height:100dvh;
+}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+input,select{font-family:inherit;font-size:16px;color:var(--ink)}
+
+/* ── coquille de l'app : colonne centrée, largeur mobile ── */
+.app{
+  max-width:520px;
+  margin:0 auto;
+  padding:14px 16px calc(118px + env(safe-area-inset-bottom)); /* place pour la barre d'onglets */
+}
+
+/* ═══ EN-TÊTE : marque + titre ═══ */
+header.top{display:flex;align-items:center;gap:11px;padding:6px 2px 16px}
+header.top .mk{display:flex;color:var(--accent);line-height:0}
+header.top .titles h1{font-family:var(--font-display);font-size:1.35rem;font-weight:800;letter-spacing:-.02em;line-height:1.1}
+header.top .titles .sub{font-size:.72rem;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-faint)}
+
+/* ═══ ÉCRANS (un seul visible à la fois) ═══ */
+.screen{display:none}
+.screen.on{display:block;animation:enter .4s var(--ease)}
+@keyframes enter{from{opacity:0;transform:translateY(14px) scale(.985)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.screen.on{animation:none}}
+
+/* ═══ CARTES GÉNÉRIQUES ═══ */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:18px 18px;margin-bottom:14px}
+.card .label{display:block;font-size:.72rem;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:10px}
+
+/* carte sombre « héros » : le chiffre qui compte */
+.hero{background:var(--ink);border:none;border-radius:var(--radius);padding:20px 22px;margin-bottom:14px;color:var(--cream);box-shadow:var(--shadow-card)}
+.hero .label{display:block;font-size:.72rem;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:rgba(243,239,232,.55);margin-bottom:6px}
+.hero .big{font-family:var(--font-display);font-weight:800;font-size:2.35rem;line-height:1.05;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.hero .rows{margin-top:14px;border-top:1px solid rgba(243,239,232,.14);padding-top:11px;display:flex;flex-direction:column;gap:6px}
+.hero .r{display:flex;justify-content:space-between;font-size:.92rem}
+.hero .r span:first-child{color:rgba(243,239,232,.62);font-weight:500}
+.hero .r span:last-child{font-weight:700;font-variant-numeric:tabular-nums}
+.hero .r.neg span:last-child{color:#e8b7a4}
+
+/* ═══ NAVIGATEUR DE DATE / MOIS / ANNÉE (‹ … ›) ═══ */
+.nav{display:flex;align-items:center;gap:8px;margin-bottom:14px}
+.nav .arrow{
+  width:44px;height:44px;flex:none;border-radius:var(--radius-sm);
+  background:var(--surface);border:1px solid var(--line);
+  font-size:1.15rem;font-weight:800;color:var(--ink-soft);
+  display:flex;align-items:center;justify-content:center;transition:.13s var(--ease);
+}
+.nav .arrow:active{transform:scale(.95)}
+.nav .arrow:disabled{opacity:.3;cursor:default}
+.nav .navlabel{
+  flex:1;height:44px;border-radius:var(--radius-sm);
+  background:var(--surface);border:1px solid var(--line);
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  font-weight:800;font-size:1rem;position:relative;overflow:hidden;
+}
+.nav .navlabel .today-chip{font-size:.68rem;font-weight:800;letter-spacing:.05em;text-transform:uppercase;background:var(--accent-bg);color:var(--accent);padding:2px 8px;border-radius:8px}
+/* champ date invisible par-dessus l'étiquette (tap = ouvrir le calendrier natif) */
+.nav .navlabel input[type=date]{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer}
+
+/* ═══ ÉCRAN SAISIE : compteurs d'actes ═══ */
+.acts{display:flex;flex-direction:column;gap:9px}
+.act{
+  display:flex;align-items:center;gap:10px;
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-sm);
+  padding:11px 12px;transition:border-color .13s;
+}
+.act.hit{border-color:var(--accent)}
+.act .info{flex:1;min-width:0}
+.act .info .n{font-weight:700;font-size:1rem;line-height:1.25}
+.act .info .p{font-size:.86rem;color:var(--ink-soft);font-weight:500;font-variant-numeric:tabular-nums}
+.act .step{display:flex;align-items:center;gap:2px}
+.act .step button{
+  width:42px;height:42px;border-radius:14px;flex:none;
+  background:var(--accent-bg);color:var(--accent);
+  font-size:1.35rem;font-weight:800;line-height:1;
+  display:flex;align-items:center;justify-content:center;
+  transition:.13s var(--ease);
+}
+.act .step button:active{transform:scale(.92)}
+.act .step button.minus{background:var(--bg);color:var(--ink-faint)}
+.act.hit .step button.minus{background:var(--bg);color:var(--ink-soft)}
+.act .step .count{
+  min-width:34px;text-align:center;
+  font-family:var(--font-display);font-weight:800;font-size:1.3rem;
+  color:var(--ink-faint);font-variant-numeric:tabular-nums;
+}
+.act.hit .step .count{color:var(--accent)}
+
+/* ═══ ÉCRAN MOIS : projection + répartition ═══ */
+.proj{background:var(--accent-bg);border:none;border-radius:var(--radius);padding:17px 20px;margin-bottom:14px;color:var(--accent)}
+.proj .label{color:var(--accent);opacity:.7;margin-bottom:6px;display:block;font-size:.72rem;font-weight:800;letter-spacing:.07em;text-transform:uppercase}
+.proj .big{font-family:var(--font-display);font-weight:800;font-size:1.7rem;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1.15}
+.proj .det{font-size:.86rem;font-weight:600;margin-top:4px;opacity:.85}
+
+.break{display:flex;flex-direction:column;gap:12px}
+.break .li .t{display:flex;justify-content:space-between;align-items:baseline;gap:10px;font-size:.95rem}
+.break .li .t .n{font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.break .li .t .v{font-weight:800;font-variant-numeric:tabular-nums;flex:none}
+.break .li .t .c{color:var(--ink-faint);font-weight:600;font-size:.86rem;flex:none}
+.break .li .bar{height:6px;border-radius:4px;background:var(--bg);margin-top:5px;overflow:hidden}
+.break .li .bar i{display:block;height:100%;border-radius:4px;background:var(--accent)}
+
+.kpis{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-sm);padding:12px 14px}
+.kpi .k{font-size:.72rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-faint)}
+.kpi .v{font-family:var(--font-display);font-weight:800;font-size:1.25rem;font-variant-numeric:tabular-nums;margin-top:2px}
+
+/* ═══ ÉCRAN HISTORIQUE ═══ */
+.mrow{
+  display:flex;align-items:center;gap:12px;
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-sm);
+  padding:13px 16px;margin-bottom:9px;
+}
+.mrow .m{flex:1}
+.mrow .m .n{font-weight:800;text-transform:capitalize}
+.mrow .m .c{font-size:.82rem;color:var(--ink-faint);font-weight:600}
+.mrow .fig{text-align:right}
+.mrow .fig .ca{font-weight:800;font-variant-numeric:tabular-nums}
+.mrow .fig .net{font-size:.84rem;color:var(--accent);font-weight:700;font-variant-numeric:tabular-nums}
+.mrow.cur{border-color:var(--accent)}
+.mrow.cur .m .c{color:var(--accent)}
+.empty{color:var(--ink-faint);font-weight:600;text-align:center;padding:26px 10px;font-size:.95rem}
+
+/* ═══ ÉCRAN RÉGLAGES ═══ */
+.sec{margin-bottom:16px}
+.prow{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.prow input[type=text]{
+  flex:1;min-width:0;border:1px solid var(--line);border-radius:12px;
+  padding:10px 12px;background:var(--bg);font-weight:600;
+}
+.prow input[type=number]{
+  width:88px;flex:none;border:1px solid var(--line);border-radius:12px;
+  padding:10px 8px;background:var(--bg);font-weight:700;text-align:right;
+  font-variant-numeric:tabular-nums;
+}
+.prow .unit{color:var(--ink-faint);font-weight:700;flex:none;width:14px}
+.prow .del{
+  width:38px;height:38px;flex:none;border-radius:12px;background:var(--danger-bg);
+  color:var(--danger);font-size:1.1rem;font-weight:800;
+  display:flex;align-items:center;justify-content:center;
+}
+.prow.rate label{flex:1;font-weight:600;font-size:.95rem}
+.btn{
+  display:flex;align-items:center;justify-content:center;gap:8px;width:100%;
+  border-radius:var(--radius-sm);padding:13px;font-weight:800;font-size:.95rem;
+  transition:.13s var(--ease);
+}
+.btn:active{transform:scale(.98)}
+.btn.ghost{background:var(--bg);border:1px dashed var(--ink-faint);color:var(--ink-soft)}
+.btn.solid{background:var(--accent);color:#fff;box-shadow:0 8px 20px -8px var(--accent)}
+.btn.line{background:var(--surface);border:1px solid var(--line);color:var(--ink)}
+.btn.warn{background:var(--danger-bg);color:var(--danger)}
+.btn + .btn{margin-top:8px}
+.hint{font-size:.84rem;color:var(--ink-soft);font-weight:500;margin-top:10px;line-height:1.45}
+.hint b{color:var(--accent)}
+
+/* pastilles des jours travaillés */
+.days{display:flex;gap:6px}
+.days button{
+  flex:1;height:42px;border-radius:12px;background:var(--bg);
+  border:1px solid var(--line);font-weight:800;font-size:.9rem;color:var(--ink-faint);
+  transition:.13s var(--ease);
+}
+.days button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+
+/* ═══ ÉCRAN CALENDRIER : grille du mois, montant par jour ═══ */
+.cal{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:14px}
+.cal .wd{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:6px}
+.cal .wd span{text-align:center;font-size:.68rem;font-weight:800;letter-spacing:.04em;color:var(--ink-faint)}
+.cal .grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.cal .d{
+  aspect-ratio:.82;border-radius:12px;background:var(--bg);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+  border:1.5px solid transparent;padding:2px;transition:.13s var(--ease);
+}
+.cal .d:active{transform:scale(.94)}
+.cal .d.blank{background:none;pointer-events:none}
+/* numéro du jour : petit et discret (gris), pour ne jamais se
+   confondre avec le montant affiché dessous */
+.cal .d .n{font-size:.66rem;font-weight:600;color:var(--ink-faint);line-height:1}
+.cal .d .eu{font-family:var(--font-display);font-weight:800;font-size:.8rem;color:var(--accent);font-variant-numeric:tabular-nums;line-height:1}
+.cal .d.today{border-color:var(--accent)}
+.cal .tot{display:flex;flex-direction:column;gap:2px;margin-top:12px;border-top:1px solid var(--line);padding-top:10px;font-size:.92rem;font-weight:600}
+.cal .tot b{font-weight:800}
+.cal .tot .hintc{font-size:.76rem;color:var(--ink-faint);font-weight:600}
+
+/* ═══ SÉLECTEUR MOIS / ANNÉE (écran Bilan) ═══ */
+.seg{display:flex;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-sm);padding:5px;gap:4px;margin-bottom:14px}
+.seg button{
+  flex:1;padding:9px;border-radius:12px;font-weight:800;font-size:.78rem;
+  letter-spacing:.05em;text-transform:uppercase;color:var(--ink-faint);
+  transition:.13s var(--ease);
+}
+.seg button.on{background:var(--accent-bg);color:var(--accent)}
+
+/* ═══ BARRE D'ONGLETS FLOTTANTE ═══ */
+.tabbar{
+  position:fixed;left:50%;transform:translateX(-50%);
+  bottom:calc(12px + env(safe-area-inset-bottom));
+  width:min(400px,calc(100% - 24px));
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+  box-shadow:var(--shadow-card);
+  display:flex;padding:7px;gap:4px;z-index:50;
+}
+.tabbar button{
+  flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;
+  padding:8px 4px;border-radius:18px;color:var(--ink-faint);
+  font-size:.66rem;font-weight:800;letter-spacing:.03em;text-transform:uppercase;
+  transition:.13s var(--ease);
+}
+.tabbar button svg{width:21px;height:21px}
+.tabbar button.on{background:var(--accent-bg);color:var(--accent)}
+
+/* grand écran : on garde la colonne, juste un peu plus d'air */
+@media(min-width:700px){
+  .app{max-width:560px;padding-top:30px}
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ═══ EN-TÊTE ═══ -->
+  <header class="top">
+    <span class="mk" id="logo"></span>
+    <div class="titles">
+      <div class="sub">le calculateur</div>
+      <h1>Bob</h1>
+    </div>
+  </header>
+
+  <!-- ═══════════ ÉCRAN 1 · SAISIE ═══════════ -->
+  <section class="screen" id="scr-saisie">
+    <div class="nav">
+      <button class="arrow" id="day-prev" aria-label="Jour précédent">‹</button>
+      <div class="navlabel" id="day-label">
+        <!-- rempli par renderSaisie() ; le champ date invisible ouvre le calendrier -->
+        <input type="date" id="day-input" aria-label="Choisir une date">
+      </div>
+      <button class="arrow" id="day-next" aria-label="Jour suivant">›</button>
+    </div>
+
+    <!-- total du jour -->
+    <div class="hero" id="day-hero"></div>
+
+    <!-- compteurs par type d'acte -->
+    <div class="acts" id="act-list"></div>
+  </section>
+
+  <!-- ═══════════ ÉCRAN 2 · CALENDRIER ═══════════ -->
+  <section class="screen" id="scr-cal">
+    <div class="nav">
+      <button class="arrow" id="cal-prev" aria-label="Mois précédent">‹</button>
+      <div class="navlabel" id="cal-label"></div>
+      <button class="arrow" id="cal-next" aria-label="Mois suivant">›</button>
+    </div>
+    <div id="cal-body"></div>
+  </section>
+
+  <!-- ═══════════ ÉCRAN 3 · BILAN (mois + année regroupés) ═══════════ -->
+  <section class="screen" id="scr-bilan">
+    <!-- bascule Mois / Année -->
+    <div class="seg" id="bilan-seg">
+      <button data-v="mois" class="on">Mois</button>
+      <button data-v="annee">Année</button>
+    </div>
+
+    <!-- vue MOIS -->
+    <div id="bilan-mois">
+      <div class="nav">
+        <button class="arrow" id="mo-prev" aria-label="Mois précédent">‹</button>
+        <div class="navlabel" id="mo-label"></div>
+        <button class="arrow" id="mo-next" aria-label="Mois suivant">›</button>
+      </div>
+      <div id="mo-body"></div>
+    </div>
+
+    <!-- vue ANNÉE -->
+    <div id="bilan-annee" hidden>
+      <div class="nav">
+        <button class="arrow" id="yr-prev" aria-label="Année précédente">‹</button>
+        <div class="navlabel" id="yr-label"></div>
+        <button class="arrow" id="yr-next" aria-label="Année suivante">›</button>
+      </div>
+      <div id="yr-body"></div>
+    </div>
+  </section>
+
+  <!-- ═══════════ ÉCRAN 4 · RÉGLAGES ═══════════ -->
+  <section class="screen" id="scr-param">
+    <div class="card sec">
+      <span class="label">Actes & tarifs</span>
+      <div id="p-acts"></div>
+      <button class="btn ghost" id="p-add-act">+ Ajouter un acte</button>
+      <p class="hint">Modifier un tarif recalcule aussi les mois passés (les saisies mémorisent le <b>nombre</b> d'actes, pas le montant).</p>
+    </div>
+
+    <div class="card sec">
+      <span class="label">Charges</span>
+      <div class="prow rate"><label>Charges de cabinet</label><input type="number" id="p-cab" min="0" max="100" step="0.5" inputmode="decimal"><span class="unit">%</span></div>
+      <div class="prow rate"><label>Charges annexes</label><input type="number" id="p-ann" min="0" max="100" step="0.5" inputmode="decimal"><span class="unit">%</span></div>
+      <div class="prow rate"><label>URSSAF / CARMF <small style="color:var(--ink-faint)">(sur le restant)</small></label><input type="number" id="p-soc" min="0" max="100" step="0.5" inputmode="decimal"><span class="unit">%</span></div>
+      <p class="hint" id="p-formula"></p>
+    </div>
+
+    <div class="card sec">
+      <span class="label">Jours travaillés (pour la projection)</span>
+      <div class="days" id="p-days"></div>
+    </div>
+
+    <div class="card sec">
+      <span class="label">Données</span>
+      <button class="btn solid" id="p-export">Exporter une sauvegarde (JSON)</button>
+      <button class="btn line" id="p-import">Importer une sauvegarde</button>
+      <input type="file" id="p-import-file" accept=".json,application/json" hidden>
+      <button class="btn warn" id="p-reset">Tout effacer</button>
+      <p class="hint">Les données vivent uniquement dans <b>ce navigateur</b> (rien n'est envoyé en ligne). Pensez à exporter une sauvegarde de temps en temps.</p>
+    </div>
+  </section>
+</div>
+
+<!-- ═══ BARRE D'ONGLETS ═══ -->
+<nav class="tabbar" id="tabbar">
+  <button data-tab="saisie" class="on">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>
+    Saisie
+  </button>
+  <button data-tab="cal">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="16" rx="3"/><path d="M4 10h16M9 3v4M15 3v4"/></svg>
+    Calendrier
+  </button>
+  <button data-tab="bilan">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 20V13M12 20V6M19 20v-9"/></svg>
+    Bilan
+  </button>
+  <button data-tab="param">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 8h10M18 8h2M4 16h2M10 16h10"/><circle cx="16" cy="8" r="2.2"/><circle cx="7" cy="16" r="2.2"/></svg>
+    Réglages
+  </button>
+</nav>
+
+<script>
+/* ════════════════════════════════════════════════════════════════
+   LOGIQUE — tout est commenté pour pouvoir être modifié facilement.
+   Plan : 1. données par défaut   2. persistance (localStorage)
+          3. calculs (net, mois, projection)   4. rendu des 4 écrans
+          5. événements   6. export/import   7. PWA
+   ════════════════════════════════════════════════════════════════ */
+
+/* ── 1. DONNÉES PAR DÉFAUT ─────────────────────────────────────
+   Grille secteur 2 OPTAM (tarifs au 1er janvier 2026).
+   5 actes de base + 4 variantes avec dépassement (+30 €).
+   Tout est modifiable dans l'écran Réglages.                    */
+const DEFAULTS = {
+  version: 1,
+  acts: [
+    { id:'cnp',    name:'Consultation (CNP + MCS)',        price:57    },
+    { id:'cnp-d',  name:'Consultation + dépassement',      price:87    },
+    { id:'jeune',  name:'Consultation < 25 ans',           price:75    },
+    { id:'apy',    name:'Avis ponctuel (APY)',             price:67.5  },
+    { id:'apy-d',  name:'Avis ponctuel + dépassement',     price:97.5  },
+    { id:'mcy',    name:'Urgente MT/SAS (MCY)',            price:85    },
+    { id:'mcy-d',  name:'Urgente + dépassement',           price:115   },
+    { id:'alqp',   name:'Test dépression (ALQP003)',       price:69.12 },
+    { id:'alqp-d', name:'Test dépression + dépassement',   price:99.12 },
+  ],
+  rates: { cab:20, ann:5, soc:35 },   // % cabinet, % annexes, % URSSAF-CARMF sur le restant
+  workdays: [1,2,3,4,5],              // jours travaillés : 0=dim, 1=lun … 6=sam
+  entries: {}                          // { 'AAAA-MM-JJ': { idActe: nombre } }
+};
+
+/* ── 2. PERSISTANCE ──────────────────────────────────────────── */
+const STORE_KEY = 'bob-le-calculateur-v1';
+
+function load(){
+  try{
+    const raw = localStorage.getItem(STORE_KEY);
+    if(!raw) return structuredClone(DEFAULTS);
+    const d = JSON.parse(raw);
+    // fusion douce : si une clé manque (ancienne version), on la complète
+    return Object.assign(structuredClone(DEFAULTS), d);
+  }catch(e){ return structuredClone(DEFAULTS); }
+}
+function save(){ localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
+
+let state = load();
+
+/* état d'interface (non sauvegardé) */
+const today = () => { const t = new Date(); t.setHours(0,0,0,0); return t; };
+let ui = {
+  tab: 'saisie',
+  day: today(),                       // date affichée sur l'écran Saisie
+  cal: { y: today().getFullYear(), m: today().getMonth() },    // écran Calendrier
+  month: { y: today().getFullYear(), m: today().getMonth() },  // Bilan · vue mois
+  year: today().getFullYear(),        // Bilan · vue année
+  bilanView: 'mois',                  // 'mois' ou 'annee'
+};
+
+/* ── OUTILS DATES & FORMATS ──────────────────────────────────── */
+const pad = n => String(n).padStart(2,'0');
+const dayKey   = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const monthKey = (y,m) => `${y}-${pad(m+1)}`;
+
+const fmtEUR  = new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR',minimumFractionDigits:0,maximumFractionDigits:0});
+const fmtEUR2 = new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR',minimumFractionDigits:0,maximumFractionDigits:2});
+const euro  = n => fmtEUR.format(Math.round(n));   // agrégats : arrondis à l'euro
+const euro2 = n => fmtEUR2.format(n);              // tarifs : centimes si besoin
+
+const frDay = d => d.toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'});
+const frMonth = (y,m) => new Date(y,m,1).toLocaleDateString('fr-FR',{month:'long',year:'numeric'});
+
+/* ── 3. CALCULS ──────────────────────────────────────────────── */
+
+/* Décomposition du net :
+   CA − charges cabinet − charges annexes = restant
+   restant − URSSAF/CARMF (% du restant) = NET                    */
+function netOf(ca){
+  const cab = ca * state.rates.cab/100;
+  const ann = ca * state.rates.ann/100;
+  const reste = ca - cab - ann;
+  const soc = reste * state.rates.soc/100;
+  return { ca, cab, ann, soc, net: reste - soc };
+}
+/* ratio global CA → net (pour l'affichage de la formule) */
+const netRatio = () => (1 - state.rates.cab/100 - state.rates.ann/100) * (1 - state.rates.soc/100);
+
+/* prix d'un acte par id (0 si l'acte a été supprimé) */
+function priceOf(id){
+  const a = state.acts.find(a => a.id === id);
+  return a ? a.price : 0;
+}
+
+/* CA d'une journée */
+function dayCA(key){
+  const e = state.entries[key]; if(!e) return 0;
+  return Object.entries(e).reduce((s,[id,n]) => s + priceOf(id)*n, 0);
+}
+
+/* Totaux d'un mois : CA, nb d'actes, détail par acte */
+function monthTotals(y,m){
+  const prefix = monthKey(y,m);
+  let ca = 0, n = 0; const byAct = {};
+  for(const [k,e] of Object.entries(state.entries)){
+    if(!k.startsWith(prefix)) continue;
+    for(const [id,c] of Object.entries(e)){
+      ca += priceOf(id)*c; n += c;
+      byAct[id] = (byAct[id]||0) + c;
+    }
+  }
+  return { ca, n, byAct };
+}
+
+/* Totaux d'une année */
+function yearTotals(y){
+  let ca = 0, n = 0;
+  for(let m=0;m<12;m++){ const t = monthTotals(y,m); ca += t.ca; n += t.n; }
+  return { ca, n };
+}
+
+/* Jours travaillés (selon le planning) entre le 1er du mois et `lastDay` inclus */
+function workedDays(y,m,lastDay){
+  let c = 0;
+  for(let d=1; d<=lastDay; d++){
+    if(state.workdays.includes(new Date(y,m,d).getDay())) c++;
+  }
+  return c;
+}
+const daysInMonth = (y,m) => new Date(y,m+1,0).getDate();
+
+/* Projection fin de mois (uniquement pour le mois en cours) :
+   CA cumulé ÷ jours travaillés écoulés × jours travaillés du mois */
+function projection(){
+  const t = today();
+  const y = t.getFullYear(), m = t.getMonth();
+  const elapsed = workedDays(y,m,t.getDate());
+  const total   = workedDays(y,m,daysInMonth(y,m));
+  if(elapsed === 0) return null;
+  const ca = monthTotals(y,m).ca / elapsed * total;
+  return { ca, elapsed, total };
+}
+
+/* ── 4. RENDU ────────────────────────────────────────────────── */
+
+/* le monogramme M (design system) — tracé en currentColor */
+function markSVG(size, weight){
+  const ring = weight, m = (weight*0.85).toFixed(2);
+  return `<svg viewBox="0 0 100 100" width="${size}" height="${size}" role="img" aria-label="M">
+    <path d="M 70.3 73 A 33 33 0 1 0 29.7 73" fill="none" stroke="currentColor" stroke-width="${ring}" stroke-linecap="round"/>
+    <path d="M 40 64 L 40 50 L 50 58 L 60 50 L 60 64" fill="none" stroke="currentColor" stroke-width="${m}" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+}
+document.getElementById('logo').innerHTML = markSVG(38, 9);
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+/* ─── Écran SAISIE ─── */
+function renderSaisie(){
+  const d = ui.day, key = dayKey(d);
+  const isToday = key === dayKey(today());
+
+  // étiquette de date (le champ <input date> reste par-dessus, invisible)
+  $('day-label').innerHTML =
+    (isToday ? '<span class="today-chip">Aujourd’hui</span>' : '') +
+    `<span>${frDay(d)}</span>` +
+    `<input type="date" id="day-input" aria-label="Choisir une date" value="${key}">`;
+  $('day-input').addEventListener('change', e => {
+    if(!e.target.value) return;
+    const [y,m,dd] = e.target.value.split('-').map(Number);
+    ui.day = new Date(y, m-1, dd);
+    renderSaisie();
+  });
+
+  // carte totale du jour
+  const e = state.entries[key] || {};
+  const ca = dayCA(key);
+  const nActs = Object.values(e).reduce((s,n)=>s+n,0);
+  $('day-hero').innerHTML = `
+    <span class="label">Recettes du jour</span>
+    <div class="big">${euro(ca)}</div>
+    <div class="rows">
+      <div class="r"><span>Actes</span><span>${nActs}</span></div>
+      <div class="r"><span>Net estimé (≈ ${(netRatio()*100).toFixed(1).replace('.',',')} %)</span><span>${euro(ca*netRatio())}</span></div>
+    </div>`;
+
+  // compteurs
+  $('act-list').innerHTML = state.acts.map(a => {
+    const c = e[a.id] || 0;
+    return `<div class="act${c>0?' hit':''}" data-id="${a.id}">
+      <div class="info">
+        <div class="n">${esc(a.name)}</div>
+        <div class="p">${euro2(a.price)}</div>
+      </div>
+      <div class="step">
+        <button class="minus" data-dir="-1" aria-label="Retirer">−</button>
+        <span class="count">${c}</span>
+        <button data-dir="1" aria-label="Ajouter">+</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/* clic sur + / − : délégation d'événement sur la liste */
+$('act-list').addEventListener('click', ev => {
+  const btn = ev.target.closest('button'); if(!btn) return;
+  const id = btn.closest('.act').dataset.id;
+  const key = dayKey(ui.day);
+  const e = state.entries[key] || (state.entries[key] = {});
+  const next = (e[id]||0) + Number(btn.dataset.dir);
+  if(next <= 0) delete e[id]; else e[id] = next;
+  if(Object.keys(e).length === 0) delete state.entries[key];
+  save(); renderSaisie();
+});
+
+$('day-prev').addEventListener('click', () => { ui.day.setDate(ui.day.getDate()-1); renderSaisie(); });
+$('day-next').addEventListener('click', () => { ui.day.setDate(ui.day.getDate()+1); renderSaisie(); });
+
+/* ─── Écran CALENDRIER ───
+   Grille du mois : chaque jour affiche ses recettes (arrondies, en €).
+   Plus la journée a rapporté, plus la teinte verte est soutenue.
+   Taper un jour ouvre sa saisie.                                  */
+function renderCal(){
+  const {y,m} = ui.cal;
+  $('cal-label').textContent = frMonth(y,m);
+
+  const nd = daysInMonth(y,m);
+  // recettes de chaque jour + maximum (pour doser l'intensité de la teinte)
+  const byDay = {}; let max = 0;
+  for(let d=1; d<=nd; d++){
+    const ca = dayCA(`${y}-${pad(m+1)}-${pad(d)}`);
+    byDay[d] = ca; if(ca > max) max = ca;
+  }
+
+  const first = (new Date(y,m,1).getDay()+6)%7;  // décalage : 0 = lundi
+  const todayK = dayKey(today());
+  let cells = '';
+  for(let i=0; i<first; i++) cells += '<div class="d blank"></div>';
+  for(let d=1; d<=nd; d++){
+    const k = `${y}-${pad(m+1)}-${pad(d)}`;
+    const ca = byDay[d];
+    const cls = 'd' + (ca>0?' has':'') + (k===todayK?' today':'');
+    // teinte : de 10 % à 32 % d'opacité du vert accent selon le montant
+    const style = ca>0 ? ` style="background:rgba(31,111,92,${(0.10 + 0.22*ca/max).toFixed(2)})"` : '';
+    // on affiche le NET estimé du jour (pas le brut)
+    cells += `<div class="${cls}" data-d="${d}"${style}>` +
+             `<span class="n">${d}</span>` +
+             (ca>0 ? `<span class="eu">${Math.round(netOf(ca).net)}</span>` : '') +
+             `</div>`;
+  }
+
+  const t = monthTotals(y,m);
+  $('cal-body').innerHTML = `
+    <div class="cal">
+      <div class="wd">${['L','M','M','J','V','S','D'].map(x=>`<span>${x}</span>`).join('')}</div>
+      <div class="grid">${cells}</div>
+      <div class="tot">
+        <span>Net : <b>${euro(netOf(t.ca).net)}</b> · brut ${euro(t.ca)} · ${t.n} acte${t.n>1?'s':''}</span>
+        <span class="hintc">montants nets en € — touchez un jour pour le saisir ou le corriger</span>
+      </div>
+    </div>`;
+}
+/* taper un jour → écran Saisie sur cette date */
+$('cal-body').addEventListener('click', ev => {
+  const cell = ev.target.closest('.d[data-d]'); if(!cell) return;
+  ui.day = new Date(ui.cal.y, ui.cal.m, Number(cell.dataset.d));
+  switchTab('saisie');
+});
+$('cal-prev').addEventListener('click', () => {
+  ui.cal.m--; if(ui.cal.m < 0){ ui.cal.m = 11; ui.cal.y--; } renderCal();
+});
+$('cal-next').addEventListener('click', () => {
+  ui.cal.m++; if(ui.cal.m > 11){ ui.cal.m = 0; ui.cal.y++; } renderCal();
+});
+
+/* ─── Écran BILAN · vue MOIS ─── */
+function renderMois(){
+  const {y,m} = ui.month;
+  const now = today();
+  const isCurrent = y === now.getFullYear() && m === now.getMonth();
+  $('mo-label').textContent = frMonth(y,m);
+  // on ne navigue pas au-delà du mois en cours
+  $('mo-next').disabled = isCurrent || (y > now.getFullYear() || (y === now.getFullYear() && m >= now.getMonth()));
+
+  const t = monthTotals(y,m);
+  const d = netOf(t.ca);
+  let html = `
+    <div class="hero">
+      <span class="label">Net estimé — ${frMonth(y,m)}</span>
+      <div class="big">${euro(d.net)}</div>
+      <div class="rows">
+        <div class="r"><span>CA encaissé</span><span>${euro(d.ca)}</span></div>
+        <div class="r neg"><span>Charges cabinet (${state.rates.cab} %)</span><span>−${euro(d.cab)}</span></div>
+        <div class="r neg"><span>Charges annexes (${state.rates.ann} %)</span><span>−${euro(d.ann)}</span></div>
+        <div class="r neg"><span>URSSAF / CARMF (${state.rates.soc} %)</span><span>−${euro(d.soc)}</span></div>
+      </div>
+    </div>`;
+
+  // projection : seulement le mois en cours
+  if(isCurrent){
+    const p = projection();
+    if(p){
+      html += `
+      <div class="proj">
+        <span class="label">Projection fin de mois</span>
+        <div class="big">${euro(p.ca)} <span style="font-size:.95rem;font-weight:700">brut</span> · ${euro(netOf(p.ca).net)} <span style="font-size:.95rem;font-weight:700">net</span></div>
+        <div class="det">sur la base de ${p.elapsed} jour${p.elapsed>1?'s':''} travaillé${p.elapsed>1?'s':''} sur ${p.total} prévus</div>
+      </div>`;
+    }
+  }
+
+  // indicateurs rapides
+  const prev = m === 0 ? monthTotals(y-1,11) : monthTotals(y,m-1);
+  const wd = isCurrent ? workedDays(y,m,now.getDate()) : workedDays(y,m,daysInMonth(y,m));
+  html += `
+    <div class="kpis">
+      <div class="kpi"><div class="k">Actes</div><div class="v">${t.n}</div></div>
+      <div class="kpi"><div class="k">Moy. / j travaillé</div><div class="v">${wd>0 ? euro(t.ca/wd) : '—'}</div></div>
+      <div class="kpi"><div class="k">Mois précédent</div><div class="v">${prev.ca>0 ? euro(prev.ca) : '—'}</div></div>
+      <div class="kpi"><div class="k">vs précédent</div><div class="v">${prev.ca>0 && t.ca>0 ? (t.ca>=prev.ca?'+':'') + Math.round((t.ca-prev.ca)/prev.ca*100) + ' %' : '—'}</div></div>
+    </div>`;
+
+  // répartition par acte
+  const rows = state.acts
+    .map(a => ({ a, c: t.byAct[a.id]||0 }))
+    .filter(x => x.c > 0)
+    .map(x => ({ ...x, sub: x.c * x.a.price }))
+    .sort((p,q) => q.sub - p.sub);
+  if(rows.length){
+    const max = rows[0].sub;
+    html += `<div class="card"><span class="label">Répartition par acte</span><div class="break">` +
+      rows.map(r => `
+        <div class="li">
+          <div class="t"><span class="n">${esc(r.a.name)}</span><span class="c">×${r.c}</span><span class="v">${euro(r.sub)}</span></div>
+          <div class="bar"><i style="width:${Math.max(4, r.sub/max*100)}%"></i></div>
+        </div>`).join('') +
+      `</div></div>`;
+  } else {
+    html += `<div class="card"><div class="empty">Aucun acte saisi ce mois-ci.</div></div>`;
+  }
+  $('mo-body').innerHTML = html;
+}
+$('mo-prev').addEventListener('click', () => {
+  ui.month.m--; if(ui.month.m < 0){ ui.month.m = 11; ui.month.y--; } renderMois();
+});
+$('mo-next').addEventListener('click', () => {
+  ui.month.m++; if(ui.month.m > 11){ ui.month.m = 0; ui.month.y++; } renderMois();
+});
+
+/* ─── Écran BILAN · vue ANNÉE ─── */
+function renderHisto(){
+  const y = ui.year, now = today();
+  $('yr-label').textContent = y;
+  $('yr-next').disabled = y >= now.getFullYear();
+
+  const tot = yearTotals(y);
+  const dn = netOf(tot.ca);
+  let html = `
+    <div class="hero">
+      <span class="label">Cumul ${y}</span>
+      <div class="big">${euro(tot.ca)}</div>
+      <div class="rows">
+        <div class="r"><span>Net estimé</span><span>${euro(dn.net)}</span></div>
+        <div class="r"><span>Actes</span><span>${tot.n}</span></div>
+      </div>
+    </div>`;
+
+  // liste des mois (du plus récent au plus ancien), seulement ceux avec activité
+  const rows = [];
+  for(let m=11; m>=0; m--){
+    const t = monthTotals(y,m);
+    if(t.n === 0) continue;
+    const isCur = y === now.getFullYear() && m === now.getMonth();
+    rows.push(`
+      <div class="mrow${isCur?' cur':''}">
+        <div class="m">
+          <div class="n">${new Date(y,m,1).toLocaleDateString('fr-FR',{month:'long'})}</div>
+          <div class="c">${isCur?'en cours · ':''}${t.n} acte${t.n>1?'s':''}</div>
+        </div>
+        <div class="fig">
+          <div class="ca">${euro(t.ca)}</div>
+          <div class="net">net ${euro(netOf(t.ca).net)}</div>
+        </div>
+      </div>`);
+  }
+  html += rows.length ? rows.join('') : `<div class="card"><div class="empty">Aucune activité en ${y}.</div></div>`;
+  $('yr-body').innerHTML = html;
+}
+$('yr-prev').addEventListener('click', () => { ui.year--; renderHisto(); });
+$('yr-next').addEventListener('click', () => { ui.year++; renderHisto(); });
+
+/* ─── Écran RÉGLAGES ─── */
+const DAY_LABELS = ['D','L','M','M','J','V','S']; // index = getDay() (0 = dimanche)
+const DAY_ORDER  = [1,2,3,4,5,6,0];               // affichage lundi → dimanche
+
+function renderParam(){
+  // actes
+  $('p-acts').innerHTML = state.acts.map((a,i) => `
+    <div class="prow" data-i="${i}">
+      <input type="text" value="${esc(a.name)}" data-f="name" aria-label="Nom de l'acte">
+      <input type="number" value="${a.price}" min="0" step="0.01" inputmode="decimal" data-f="price" aria-label="Tarif">
+      <span class="unit">€</span>
+      <button class="del" aria-label="Supprimer">×</button>
+    </div>`).join('');
+
+  // taux
+  $('p-cab').value = state.rates.cab;
+  $('p-ann').value = state.rates.ann;
+  $('p-soc').value = state.rates.soc;
+  $('p-formula').innerHTML =
+    `Net ≈ <b>${(netRatio()*100).toFixed(2).replace('.',',')} %</b> du CA `+
+    `(CA − ${state.rates.cab+state.rates.ann} % de charges, puis − ${state.rates.soc} % de cotisations sur le restant).`;
+
+  // jours travaillés
+  $('p-days').innerHTML = DAY_ORDER.map(d =>
+    `<button data-d="${d}" class="${state.workdays.includes(d)?'on':''}">${DAY_LABELS[d]}</button>`).join('');
+}
+
+/* édition des actes (nom / tarif) */
+$('p-acts').addEventListener('input', ev => {
+  const row = ev.target.closest('.prow'); if(!row) return;
+  const a = state.acts[Number(row.dataset.i)];
+  if(ev.target.dataset.f === 'name') a.name = ev.target.value;
+  if(ev.target.dataset.f === 'price') a.price = Math.max(0, parseFloat(ev.target.value) || 0);
+  save();
+});
+/* suppression d'un acte */
+$('p-acts').addEventListener('click', ev => {
+  if(!ev.target.classList.contains('del')) return;
+  const i = Number(ev.target.closest('.prow').dataset.i);
+  const a = state.acts[i];
+  const used = Object.values(state.entries).some(e => e[a.id]);
+  const msg = used
+    ? `Supprimer « ${a.name} » ?\n\nDes saisies existent pour cet acte : elles ne compteront plus dans les totaux (exportez une sauvegarde avant si besoin).`
+    : `Supprimer « ${a.name} » ?`;
+  if(confirm(msg)){ state.acts.splice(i,1); save(); renderParam(); }
+});
+/* ajout d'un acte */
+$('p-add-act').addEventListener('click', () => {
+  state.acts.push({ id:'a'+Date.now(), name:'Nouvel acte', price:0 });
+  save(); renderParam();
+});
+/* taux de charges */
+[['p-cab','cab'],['p-ann','ann'],['p-soc','soc']].forEach(([id,k]) => {
+  $(id).addEventListener('input', ev => {
+    state.rates[k] = Math.min(100, Math.max(0, parseFloat(ev.target.value) || 0));
+    save();
+    $('p-formula').innerHTML =
+      `Net ≈ <b>${(netRatio()*100).toFixed(2).replace('.',',')} %</b> du CA `+
+      `(CA − ${state.rates.cab+state.rates.ann} % de charges, puis − ${state.rates.soc} % de cotisations sur le restant).`;
+  });
+});
+/* jours travaillés */
+$('p-days').addEventListener('click', ev => {
+  const b = ev.target.closest('button'); if(!b) return;
+  const d = Number(b.dataset.d);
+  if(state.workdays.includes(d)) state.workdays = state.workdays.filter(x => x !== d);
+  else state.workdays.push(d);
+  save(); renderParam();
+});
+
+/* bascule Mois / Année de l'écran Bilan */
+function renderBilan(){
+  $('bilan-mois').hidden  = ui.bilanView !== 'mois';
+  $('bilan-annee').hidden = ui.bilanView !== 'annee';
+  document.querySelectorAll('#bilan-seg button').forEach(b =>
+    b.classList.toggle('on', b.dataset.v === ui.bilanView));
+  ui.bilanView === 'mois' ? renderMois() : renderHisto();
+}
+$('bilan-seg').addEventListener('click', ev => {
+  const b = ev.target.closest('button'); if(!b) return;
+  ui.bilanView = b.dataset.v;
+  renderBilan();
+});
+
+/* ── 5. NAVIGATION PAR ONGLETS ───────────────────────────────── */
+const RENDER = { saisie:renderSaisie, cal:renderCal, bilan:renderBilan, param:renderParam };
+function switchTab(tab){
+  ui.tab = tab;
+  // en arrivant sur Calendrier / Bilan, on se recale sur la période actuelle
+  if(tab === 'cal')   ui.cal = { y: today().getFullYear(), m: today().getMonth() };
+  if(tab === 'bilan'){
+    ui.month = { y: today().getFullYear(), m: today().getMonth() };
+    ui.year = today().getFullYear();
+  }
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('on'));
+  $('scr-'+tab).classList.add('on');
+  document.querySelectorAll('#tabbar button').forEach(b =>
+    b.classList.toggle('on', b.dataset.tab === tab));
+  RENDER[tab]();
+  window.scrollTo({top:0});
+}
+$('tabbar').addEventListener('click', ev => {
+  const b = ev.target.closest('button'); if(b) switchTab(b.dataset.tab);
+});
+
+/* ── 6. EXPORT / IMPORT / RAZ ────────────────────────────────── */
+$('p-export').addEventListener('click', () => {
+  const blob = new Blob([JSON.stringify(state, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `bob-sauvegarde-${dayKey(today())}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+$('p-import').addEventListener('click', () => $('p-import-file').click());
+$('p-import-file').addEventListener('change', ev => {
+  const f = ev.target.files[0]; if(!f) return;
+  const r = new FileReader();
+  r.onload = () => {
+    try{
+      const d = JSON.parse(r.result);
+      if(!d.acts || !d.entries) throw new Error('format');
+      if(confirm('Remplacer toutes les données actuelles par cette sauvegarde ?')){
+        state = Object.assign(structuredClone(DEFAULTS), d);
+        save(); renderParam();
+        alert('Sauvegarde importée ✓');
+      }
+    }catch(e){ alert('Fichier invalide : ce n’est pas une sauvegarde de Bob.'); }
+    ev.target.value = '';
+  };
+  r.readAsText(f);
+});
+$('p-reset').addEventListener('click', () => {
+  if(!confirm('Effacer TOUTES les données (saisies, tarifs, réglages) ?')) return;
+  if(!confirm('Vraiment sûr ? Cette action est définitive.\n\nPensez à exporter une sauvegarde avant.')) return;
+  state = structuredClone(DEFAULTS);
+  save(); renderParam();
+});
+
+/* ── 7. PWA : service worker (uniquement en ligne, jamais en file://) ── */
+if('serviceWorker' in navigator && location.protocol.startsWith('http')){
+  navigator.serviceWorker.register('sw.js').catch(()=>{ /* hors ligne / absent : sans gravité */ });
+}
+
+/* ── DÉMARRAGE ── */
+switchTab('saisie');
+</script>
+</body>
+</html>
