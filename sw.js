@@ -3,7 +3,7 @@
    une fois chargée une première fois (utile en mobilité).
    Pour forcer une mise à jour après modification de l'app :
    incrémenter le numéro de version ci-dessous (bob-v1 → bob-v2). */
-const CACHE = 'bob-v3'; // v3 : logo agrandi au maximum sur les icônes
+const CACHE = 'bob-v4'; // v4 : icônes à 125 %, centrage optique
 
 const SHELL = [
   './',
